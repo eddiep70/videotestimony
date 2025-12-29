@@ -1,0 +1,208 @@
+TE Video Testimony
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Testimony Platform</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #4facfe, #00f2fe);
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+.container {
+  background: #fff;
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+h1, h2 {
+  color: #333;
+}
+input {
+  width: 90%;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+button {
+  padding: 12px 20px;
+  margin: 8px;
+  border-radius: 6px;
+  border: none;
+  background: #4facfe;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+}
+button:disabled {
+  background: #999;
+}
+video {
+  width: 100%;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+.hidden {
+  display: none;
+}
+.link-box {
+  width: 90%;
+  padding: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="authBox">
+  <h1>Video Testimony</h1>
+
+  <h2>Login</h2>
+  <input type="email" id="loginEmail" placeholder="Email">
+  <input type="password" id="loginPass" placeholder="Password">
+  <button onclick="login()">Login</button>
+
+  <h2>Register</h2>
+  <input type="email" id="regEmail" placeholder="Email">
+  <input type="password" id="regPass" placeholder="Password">
+  <button onclick="register()">Register</button>
+</div>
+
+<div class="container hidden" id="dashboard">
+  <h2>Record Your Testimony</h2>
+
+  <video id="preview" autoplay muted></video>
+  <video id="playback" controls class="hidden"></video>
+
+  <button id="startBtn">Start Recording</button>
+  <button id="stopBtn" disabled>Stop & Upload</button>
+
+  <div id="shareBox" class="hidden">
+    <p>Share your video link:</p>
+    <input class="link-box" id="videoLink" readonly>
+    <button onclick="copyLink()">Copy Link</button>
+  </div>
+
+  <br>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<script>
+// 🔴 REPLACE WITH YOUR FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "SENDER_ID",
+  appId: "APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const storage = firebase.storage();
+
+// AUTH
+function login() {
+  auth.signInWithEmailAndPassword(
+    loginEmail.value,
+    loginPass.value
+  ).catch(err => alert(err.message));
+}
+
+function register() {
+  auth.createUserWithEmailAndPassword(
+    regEmail.value,
+    regPass.value
+  ).catch(err => alert(err.message));
+}
+
+function logout() {
+  auth.signOut();
+}
+
+// AUTH STATE
+auth.onAuthStateChanged(user => {
+  if (user) {
+    authBox.classList.add("hidden");
+    dashboard.classList.remove("hidden");
+    initCamera();
+  } else {
+    authBox.classList.remove("hidden");
+    dashboard.classList.add("hidden");
+  }
+});
+
+// VIDEO RECORDING
+let mediaRecorder;
+let chunks = [];
+
+async function initCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true
+    });
+
+    preview.srcObject = stream;
+    mediaRecorder = new MediaRecorder(stream);
+
+    mediaRecorder.ondataavailable = e => chunks.push(e.data);
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: "video/webm" });
+      chunks = [];
+
+      playback.src = URL.createObjectURL(blob);
+      playback.classList.remove("hidden");
+
+      const user = auth.currentUser;
+      const ref = storage.ref(`testimonies/${user.uid}_${Date.now()}.webm`);
+
+      await ref.put(blob);
+      const url = await ref.getDownloadURL();
+
+      videoLink.value = url;
+      shareBox.classList.remove("hidden");
+    };
+  } catch (e) {
+    alert("Camera or microphone access denied.");
+  }
+}
+
+startBtn.onclick = () => {
+  mediaRecorder.start();
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+};
+
+stopBtn.onclick = () => {
+  mediaRecorder.stop();
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+};
+
+// COPY LINK
+function copyLink() {
+  videoLink.select();
+  document.execCommand("copy");
+  alert("Link copied!");
+}
+</script>
+
+</body>
+</html>
